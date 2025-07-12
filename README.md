@@ -79,4 +79,3 @@ This Android application connects to a custom-built interior lighting system pow
 
 This project is intended for educational use in IoT and Android integration. All code and documentation are open-source and may be modified for personal or academic purposes.
 =======
-# AndroidProjectNiraliJani
