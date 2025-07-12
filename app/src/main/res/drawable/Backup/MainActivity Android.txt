@@ -1,0 +1,130 @@
+package com.example.interiorlightcontrol
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.*
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // 🔐 Request location permission if not granted
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                100
+            )
+        }
+
+        setContent {
+            MaterialTheme {
+                Surface {
+                    LightSensorScreen()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LightSensorScreen() {
+    var mode by remember { mutableStateOf("Loading...") }
+    var relay by remember { mutableStateOf("Loading...") }
+    var light by remember { mutableStateOf("Loading...") }
+    var rotary by remember { mutableStateOf("Loading...") }
+    var error by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            withContext(Dispatchers.IO) {
+                try {
+                    Log.d("LIGHT_APP", "🌐 Attempting to connect to http://192.168.1.1/sensor")
+                    val url = URL("http://192.168.1.1/sensor")
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 3000
+                    conn.readTimeout = 3000
+                    conn.requestMethod = "GET"
+
+                    val responseCode = conn.responseCode
+                    Log.d("LIGHT_APP", "🌐 Response Code: $responseCode")
+
+                    if (responseCode == 200) {
+                        val response = conn.inputStream.bufferedReader().readText()
+                        Log.d("LIGHT_APP", "✅ Response: $response")
+
+                        val json = JSONObject(response)
+
+                        mode = json.optString("mode", "N/A")
+                        relay = json.optString("relay", "N/A")
+                        light = json.optInt("light", -1).toString()
+                        rotary = json.optInt("rotary", -1).toString()
+
+                        error = false
+                    } else {
+                        Log.e("LIGHT_APP", "❌ HTTP error: $responseCode")
+                        error = true
+                    }
+
+                    conn.disconnect()
+                } catch (e: Exception) {
+                    Log.e("LIGHT_APP", "❌ Exception caught: ${e.message}", e)
+                    error = true
+                }
+            }
+
+            delay(3000)
+        }
+    }
+
+    // ✅ UI
+    Surface(modifier = Modifier.fillMaxSize()) {
+        if (error) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("⚠️ Failed to connect to device", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Make sure you're connected to LightControlAP", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Interior Light Control", style = MaterialTheme.typography.titleLarge)
+                Divider()
+                Text("Mode: $mode", style = MaterialTheme.typography.titleMedium)
+                Text("Relay: $relay", style = MaterialTheme.typography.titleMedium)
+                Text("Light: $light", style = MaterialTheme.typography.bodyLarge)
+                Text("Rotary: $rotary", style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+}
